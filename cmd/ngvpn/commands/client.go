@@ -3,11 +3,13 @@ package commands
 import (
 	"fmt"
 	"os"
+	"context"
 	"strings"
 
 	"github.com/netguard-vpn/netguard/internal/network"
 	"github.com/netguard-vpn/netguard/internal/peers"
 	"github.com/netguard-vpn/netguard/internal/storage"
+	"github.com/netguard-vpn/netguard/internal/vpn"
 	qrterminal "github.com/mdp/qrterminal/v3"
 	"github.com/spf13/cobra"
 )
@@ -43,6 +45,50 @@ func getPeerManager() (*peers.Manager, *storage.Database, error) {
 	return mgr, db, nil
 }
 
+
+func syncWireGuard(mgr *peers.Manager, db *storage.Database) error {
+	cfg := getConfig()
+	
+	privKeyBytes, err := os.ReadFile(fmt.Sprintf("%s/server.key", cfg.Security.KeyDirectory))
+	if err != nil {
+		return fmt.Errorf("could not read server private key: %w", err)
+	}
+
+	extIface, err := db.GetState("ext_interface")
+	if err != nil {
+		extIface = "eth0"
+	}
+
+	peerParams, err := mgr.GetServerPeersConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get peers: %w", err)
+	}
+
+	params := vpn.ServerConfigParams{
+		PrivateKey:   strings.TrimSpace(string(privKeyBytes)),
+		Address:      cfg.Network.ServerAddress + "/24",
+		ListenPort:   cfg.Server.ListenPort,
+		ExtInterface: extIface,
+		Subnet:       cfg.Network.IPv4Subnet,
+		Peers:        peerParams,
+	}
+
+	wgConfig := vpn.GenerateServerConfigFile(params)
+	
+	vpnMgr := vpn.NewManager(cfg.Server.Interface, "/etc/wireguard")
+	wgConfigPath := fmt.Sprintf("/etc/wireguard/%s.conf", cfg.Server.Interface)
+	if err := vpnMgr.WriteServerConfig(wgConfig, wgConfigPath); err != nil {
+		return fmt.Errorf("failed to write WireGuard config: %w", err)
+	}
+
+	running, _ := vpnMgr.IsRunning()
+	if running {
+		_ = vpnMgr.SyncConfig(context.Background())
+	}
+	
+	return nil
+}
+
 var clientAddCmd = &cobra.Command{
 	Use:   "add [name]",
 	Short: "Add a new VPN client",
@@ -58,6 +104,10 @@ var clientAddCmd = &cobra.Command{
 		peer, clientConfig, err := mgr.AddPeer(name)
 		if err != nil {
 			return fmt.Errorf("failed to add client '%s': %w", name, err)
+		}
+		
+		if err := syncWireGuard(mgr, db); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to sync WireGuard config: %v\n", err)
 		}
 
 		if isJSON() {
@@ -171,8 +221,12 @@ var clientRevokeCmd = &cobra.Command{
 		if err := mgr.RevokePeer(name); err != nil {
 			return fmt.Errorf("failed to revoke client '%s': %w", name, err)
 		}
+		
+		if err := syncWireGuard(mgr, db); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to sync WireGuard config: %v\n", err)
+		}
+		
 		printSuccess(fmt.Sprintf("Client '%s' revoked", name))
-		fmt.Println("Restart the server to apply: ngvpn server restart")
 		return nil
 	},
 }
@@ -196,8 +250,12 @@ var clientRemoveCmd = &cobra.Command{
 		if err := mgr.RemovePeer(name); err != nil {
 			return fmt.Errorf("failed to remove client '%s': %w", name, err)
 		}
+		
+		if err := syncWireGuard(mgr, db); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to sync WireGuard config: %v\n", err)
+		}
+		
 		printSuccess(fmt.Sprintf("Client '%s' removed", name))
-		fmt.Println("Restart the server to apply: ngvpn server restart")
 		return nil
 	},
 }
@@ -266,12 +324,15 @@ var clientRotateCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to rotate keys for '%s': %w", name, err)
 		}
+		
+		if err := syncWireGuard(mgr, db); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to sync WireGuard config: %v\n", err)
+		}
 
 		printSuccess(fmt.Sprintf("Keys rotated for client '%s'", name))
 		fmt.Fprintf(os.Stderr, "\nNew configuration:\n")
 		fmt.Fprintf(os.Stderr, "──────────────────\n")
 		fmt.Fprintln(os.Stdout, newConfig)
-		fmt.Fprintf(os.Stderr, "\nRestart the server to apply: ngvpn server restart\n")
 		return nil
 	},
 }
