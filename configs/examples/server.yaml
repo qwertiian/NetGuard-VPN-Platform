@@ -1,0 +1,84 @@
+# ============================================================
+# NetGuard VPN Server Configuration
+# ============================================================
+# Copy this file to /etc/netguard/config.yaml
+# Modify the values below to match your environment.
+#
+# Documentation: https://github.com/netguard-vpn/netguard/blob/main/docs/configuration.md
+
+server:
+  # Public endpoint that clients will connect to.
+  # This must be your server's public IP address or a domain name
+  # that resolves to it. Clients use this to establish the tunnel.
+  # REQUIRED - change this before initializing the server.
+  endpoint: "vpn.example.com"
+
+  # UDP port for WireGuard.
+  # Default: 51820 (standard WireGuard port)
+  # Ensure this port is open in your firewall for UDP traffic.
+  listen_port: 51820
+
+  # Name of the WireGuard network interface.
+  # Default: wg0
+  # You can run multiple instances with different interface names (wg0, wg1, etc.)
+  interface: "wg0"
+
+network:
+  # VPN subnet in CIDR notation.
+  # All VPN clients will be assigned IPs from this range.
+  # /24 supports up to 253 clients. Use /16 for more.
+  # Must not overlap with your existing network ranges.
+  ipv4_subnet: "10.77.0.0/24"
+
+  # Server's IP address within the VPN subnet.
+  # Must be within the subnet defined above.
+  server_address: "10.77.0.1"
+
+dns:
+  # DNS servers provided to VPN clients.
+  # These are used when the client connects in full-tunnel mode.
+  # You can use any DNS servers you trust.
+  # Common options:
+  #   - 1.1.1.1 (Cloudflare)
+  #   - 9.9.9.9 (Quad9 - malware blocking)
+  #   - 8.8.8.8 (Google)
+  #   - Your own DNS server
+  servers:
+    - "1.1.1.1"
+    - "9.9.9.9"
+
+routing:
+  # Routing mode determines how client traffic is handled.
+  #
+  # "full"  - Route ALL client traffic through the VPN.
+  #           Client's AllowedIPs = 0.0.0.0/0
+  #           All internet traffic goes through your VPN server.
+  #           Provides privacy on untrusted networks.
+  #
+  # "split" - Only route specified subnets through the VPN.
+  #           Client's AllowedIPs = the subnets listed in split_routes.
+  #           Regular internet traffic uses the client's normal connection.
+  #           Lower latency for non-VPN traffic.
+  mode: "full"
+
+  # Subnets to route through VPN when using split tunnel mode.
+  # Only used when mode is "split".
+  # Common private network ranges:
+  split_routes:
+    - "10.0.0.0/8"       # Class A private
+    - "172.16.0.0/12"    # Class B private
+    - "192.168.0.0/16"   # Class C private
+
+security:
+  # Directory for storing WireGuard keys.
+  # This directory should have 0700 permissions.
+  # Private key files within should have 0600 permissions.
+  key_directory: "/etc/netguard/keys"
+
+storage:
+  # Base directory for NetGuard data files.
+  data_directory: "/etc/netguard"
+
+  # Path to the SQLite database file.
+  # Stores client records, IP allocations, and server state.
+  database: "/etc/netguard/netguard.db"
