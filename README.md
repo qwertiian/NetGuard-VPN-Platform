@@ -68,6 +68,31 @@ sudo ngvpn doctor
 
 ---
 
+## ☁️ Free Cloud Deployment (GCP / AWS / Oracle)
+
+If you don't want to run the server on your local machine, you can deploy NetGuard permanently for free using major cloud providers. Because NetGuard is extremely lightweight, it easily fits within the "Always Free" tiers of modern cloud hosts.
+
+### Option 1: Google Cloud Platform (Recommended)
+1. Sign up for GCP and navigate to **Compute Engine**.
+2. Create a new `e2-micro` VM instance. Ensure the region is `us-central1`, `us-east1`, or `us-west1` (these are permanently free).
+3. Change the Boot Disk to **Ubuntu 24.04 LTS** and crucially, select **Standard persistent disk** (up to 30GB).
+4. Create a GCP **Firewall Rule** to allow incoming `UDP` traffic on port `51820`.
+5. SSH into the instance and follow the Native Linux Quick Start guide above.
+
+### Option 2: Oracle Cloud
+1. Sign up for Oracle Cloud Free Tier.
+2. Create an **Ampere A1 Compute** instance (up to 4 OCPUs and 24GB RAM) running Ubuntu.
+3. Edit the Default Security List for your VCN to add an ingress rule for `UDP` port `51820`.
+4. SSH into the instance and follow the Native Linux Quick Start guide above.
+
+### Option 3: AWS
+*Note: AWS Free Tier lasts for 12 months, not permanently.*
+1. Launch an EC2 `t2.micro` or `t3.micro` instance running Ubuntu.
+2. Edit the Security Group attached to your instance to allow Custom UDP on port 51820.
+3. SSH into the instance and install.
+
+---
+
 ## 🐳 Quick Start Guide (Docker - Windows/Mac/Linux)
 
 If you don't want to install dependencies directly on your host OS, or if you are running Windows/Mac, you can run the NetGuard server entirely inside Docker.
